@@ -1,10 +1,88 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_pymongo import PyMongo
+from werkzeug.security import generate_password_hash, check_password_hash
+from bson import json_util
+from bson.objectid import ObjectId
 
 app = Flask(__name__)
+
 app.config['MONGO_URI'] = 'mongodb://localhost/cenabast'
 
 mongo_connection = PyMongo(app)
+
+
+@app.route('/mensaje', methods=['POST'])
+def setMensaje():
+    ##recibo el json completo desde postman
+    request_data = request.get_json()
+    ##obtengo el parametro message y se los asigno a mensaje
+    mensaje = request_data['message']
+    ##inserto el mensaje a la collecion example 
+    id = mongo_connection.db.example.insert(request_data)
+
+    response = {
+        'id' : str(id),
+        'message' : "El mensaje es {}.".format(mensaje),
+        'code' : 201
+    }
+    return response
+
+@app.route('/mensajes', methods=['GET'])
+def getMensajes():
+    ##busco todos los mensajes a la collecion example 
+    mensajes = mongo_connection.db.example.find()
+    response = json_util.dumps(mensajes)
+    return Response(response, mimetype='application/json')
+
+@app.route('/mensaje/<id>', methods=['GET'])
+def getMensaje(id):
+
+    ##busco el mensaje en la collecion por Id 
+    mensaje = mongo_connection.db.example.find_one({
+        '_id' : ObjectId(id),
+    })
+
+    response = json_util.dumps(mensaje)
+    return Response(response, mimetype='application/json')
+
+@app.route('/mensaje/<id>', methods=['DELETE'])
+def deleteMensaje(id):
+
+    ##Elimino el mensaje en la collecion con id 
+    mongo_connection.db.example.delete_one({
+        '_id' : ObjectId(id),
+    })
+    response = jsonify({
+        'id' : str(id),
+        'message' : 'El mensaje'+ str(id) +'ha sido eliminado' ,
+        'code' : 200
+    })
+    return response
+
+@app.route('/mensaje/<id>', methods=['PUT'])
+def putMensaje(id):
+    ##recibo el json completo desde postman
+    request_data = request.get_json()
+    print(json_util.dumps(request_data))
+    #message = request_data['message']
+    #titulo = request_data['titulo']
+    #subtitulo = request_data['subtitulo']
+    ##Actualizo el mensaje de la collecion con id 
+    mongo_connection.db.example.update_one({
+        '_id' : ObjectId(id)
+    },{"$set":{
+            'message' : 'Actualizando desde python'
+        }
+    })
+
+    response = jsonify({
+        'id' : str(id),
+        'message' : 'El mensaje'+ str(id) +'ha sido actualizado' ,
+        'code' : 200
+    })
+    return response
+
+####################EXAMPLES#########################
 
 @app.route('/SetProductos', methods=['POST'])
 def setProducto():
@@ -14,6 +92,7 @@ def setProducto():
 
 @app.route('/query-example')
 def query_example():
+    # obtengo los parametros desde request GET
     # if key doesn't exist, returns None
     language = request.args.get('language')
 
@@ -33,6 +112,7 @@ def query_example():
 def form_example():
     # handle the POST request
     if request.method == 'POST':
+        #obtengo los parametros desde el formulario
         language = request.form.get('language')
         framework = request.form.get('framework')
         return '''
@@ -50,41 +130,29 @@ def form_example():
 # GET requests will be blocked
 @app.route('/json-example', methods=['POST'])
 def json_example():
+
+    ##recibo el request json completo desde postman
+    #request_data = request.get_json()
+    ##inserto el json completo tal cual a mingo
+    #id = mongo_connection.db.example.insert(request_data)
+
+    ##recibo el json completo desde postman
     request_data = request.get_json()
+    ##obtengo el parametro message y se los asigno a mensaje
+    mensaje = request_data['message']
+    ##inserto el mensaje a la collecion example 
+    id = mongo_connection.db.example.insert({
+        'message' : mensaje,
+    })
 
-    """language = None
-    framework = None
-    python_version = None
-    example = None
-    boolean_test = None
+    response = {
+        'id' : str(id),
+        'message' : "El mensaje es {}.".format(mensaje),
+        'code' : 201
+    }
+    return response
 
-    if request_data:
-        if 'language' in request_data:
-            language = request_data['language']
-
-        if 'framework' in request_data:
-            framework = request_data['framework']
-
-        if 'version_info' in request_data:
-            if 'python' in request_data['version_info']:
-                python_version = request_data['version_info']['python']
-
-        if 'examples' in request_data:
-            if (type(request_data['examples']) == list) and (len(request_data['examples']) > 0):
-                example = request_data['examples'][0]
-
-        if 'boolean_test' in request_data:
-            boolean_test = request_data['boolean_test']
-
-    return '''
-           The language value is: {}
-           The framework value is: {}
-           The Python version is: {}
-           The item at index 0 in the example list is: {}
-           The boolean value is: {}'''.format(language, framework, python_version, example, boolean_test)
-    """
-    return '<h1>Hello, World! Mensaje : {}</h1>'.format(request_data['message']) 
-
+# Se admite solo solicitudes GET
 @app.route('/', methods = ['GET'])
 def index():
     return { 'message': '<h1>Hello, World!</h1>' }
@@ -97,8 +165,6 @@ def getProductos():
 def getProducto(Id):
     return '<h1>Hello, World Producto Id:{}!</h1>'.format(Id)
 
-
-
 @app.route('/proveedores')
 def proveedores():
     return '<h1>Hello, World Proveedores!</h1>'
@@ -107,7 +173,7 @@ def proveedores():
 def clientes():
     return '<h1>Hello, World! clientes!</h1>'
 
-@app.route('/ofertar')
+@app.route('/ofertas')
 def ofertar():
     return '<h1>Hello, World Ofertas!</h1>'
 
@@ -118,6 +184,15 @@ def distribuciones():
 @app.route('/rfc')
 def rfc():
     return '<h1>Hello, World r!</h1>'    
+
+
+@app.errorhandler(404)
+def not_found(error=None):
+    message = {
+        'message':'Resource not found!'
+    }
+    return message
+
 
 if __name__ == '__main__':
     app.run('0.0.0.0',5000, debug=True)
