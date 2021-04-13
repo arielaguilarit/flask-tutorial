@@ -1,28 +1,47 @@
-from flask import Flask, request, jsonify, Response
+import os
+import sqlite3
+from flask import Flask, request, jsonify, Response, redirect, url_for, render_template
 from flask_pymongo import PyMongo
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson import json_util
 from bson.objectid import ObjectId
 
-app = Flask(__name__)
+app = Flask(__name__,template_folder='template', static_folder='static')
+
+def get_db_connection():
+    conn = sqlite3.connect('database.db')
+    conn.row_factory = sqlite3.Row
+    return conn
 
 app.config['MONGO_URI'] = 'mongodb://localhost/cenabast'
-
 mongo_connection = PyMongo(app)
 
+@app.route('/', methods=['GET'])
+def index():
+    return render_template('index.html')
+
+@app.route('/posts', methods=['GET'])
+def posts():
+    conn = get_db_connection()
+    posts = conn.execute('SELECT * FROM posts').fetchall()
+    conn.close()
+    return render_template('index.html', posts=posts)
 
 @app.route('/mensaje', methods=['POST'])
 def setMensaje():
     ##recibo el json completo desde postman
-    request_data = request.get_json()
+    request_data = request.get_json(True)
     ##obtengo el parametro message y se los asigno a mensaje
-    mensaje = request_data['message']
+    #message = request_data['message']
+    #titulo = request_data['titulo']
+    #subtitulo = request_data['subtitulo']
+    #bajada  = request_data['bajada']
     ##inserto el mensaje a la collecion example 
     id = mongo_connection.db.example.insert(request_data)
 
     response = {
         'id' : str(id),
-        'message' : "El mensaje es {}.".format(mensaje),
+        'message' : "El mensaje es {}.".format(request_data),
         'code' : 201
     }
     return response
@@ -61,17 +80,23 @@ def deleteMensaje(id):
 
 @app.route('/mensaje/<id>', methods=['PUT'])
 def putMensaje(id):
-    ##recibo el json completo desde postman
-    request_data = request.get_json()
-    print(json_util.dumps(request_data))
-    #message = request_data['message']
-    #titulo = request_data['titulo']
-    #subtitulo = request_data['subtitulo']
+    ##recibo el json completo desde postman fuerzo a True para que reciba un json
+    request_data = request.get_json(True)
+    #print(json_util.dumps(request_data))
+    print(request_data)
+
+    message = request_data['message']
+    titulo = request_data['titulo']
+    subtitulo = request_data['subtitulo']
+    bajada  = request_data['bajada']
     ##Actualizo el mensaje de la collecion con id 
     mongo_connection.db.example.update_one({
         '_id' : ObjectId(id)
     },{"$set":{
-            'message' : 'Actualizando desde python'
+           'message': message,
+           'titulo': titulo,
+           'subtitulo': subtitulo,
+           'bajada' : bajada
         }
     })
 
@@ -151,11 +176,6 @@ def json_example():
         'code' : 201
     }
     return response
-
-# Se admite solo solicitudes GET
-@app.route('/', methods = ['GET'])
-def index():
-    return { 'message': '<h1>Hello, World!</h1>' }
 
 @app.route('/productos', methods = ['GET'])
 def getProductos():
